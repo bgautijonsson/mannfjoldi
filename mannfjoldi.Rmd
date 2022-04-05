@@ -1,0 +1,150 @@
+---
+title: "Untitled"
+author: "Brynjólfur Gauti Jónsson"
+date: "2/23/2022"
+output: 
+    html_document:
+        theme: journal
+        code_folding: hide
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, error = FALSE,
+                      fig.width = 10, figh.asp = 0.621, out.width = "100%")
+
+library(pxR)
+library(cowplot)
+library(tidyverse)
+library(gganimate)
+library(scales)
+library(ggthemes)
+```
+
+
+```{r}
+d <- read.px("MAN00101.px") |> 
+    as_tibble() |> 
+    set_names(c("year", "age", "sex", "pop")) |> 
+    mutate_at(vars(year, age), as.character) |> 
+    mutate(age = case_when(age == "Á 1. ári" ~ 0,
+                           TRUE ~ parse_number(age)),
+           year = parse_number(year))
+```
+
+
+
+# Plots
+
+## Age Population Pyramid
+
+```{r}
+framf_hlutf <- d |> 
+    mutate(working = case_when(age <= 19 ~ "No",
+                               age >= 65 ~"No",
+                               TRUE ~ "Yes")) |> 
+    select(year, working, pop) |> 
+    pivot_wider(names_from = working, values_from = pop, values_fn = sum) |> 
+    group_by(year) |>
+    summarise(framfaersluhlutfall = No / Yes * 100,
+              .groups = "drop") |> 
+    mutate(framfaersluhlutfall = round(framfaersluhlutfall),
+           text = str_c("Framfærsluhlutfall: ", framfaersluhlutfall, "%"))
+```
+
+```{r}
+folksfjoldi <- d |> 
+    group_by(year) |> 
+    summarise(pop = sum(pop),
+              pop =  format(pop, big.mark = ".", decimal.mark = ","),
+              text = str_c("Fólksfjöldi: ", pop))
+```
+
+```{r}
+eldrifjoldi <- d |> 
+    filter(age >= 65) |> 
+    group_by(year) |> 
+    summarise(pop = sum(pop),
+              pop =  format(pop, big.mark = ".", decimal.mark = ","),
+              text = str_c("Fjöldi 65+: ", pop))
+```
+
+
+```{r}
+kynjahlutfall <- d |> 
+    select(-age) |> 
+    pivot_wider(names_from = sex, values_from = pop, values_fn = sum) |> 
+    mutate(perc_male = Karlar / (Karlar + Konur),
+           perc_female = 1 - perc_male) |> 
+    mutate(text_male = percent(perc_male, accuracy = 0.1),
+           text_female = percent(perc_female, accuracy = 0.1))
+```
+
+
+```{r}
+medalaldur <- d |> 
+    group_by(year) |> 
+    summarise(total_pop = sum(pop),
+              mean_age = sum(age * pop / total_pop) |> round(1),
+              .groups = "drop") |> 
+    select(-total_pop) |> 
+    mutate(text = str_c("Meðalaldur: ", mean_age))
+```
+
+```{r}
+p <- d |> 
+    mutate(base = 0,
+           ymin = ifelse(sex == "Karlar", -pop, 0),
+           ymax = ifelse(sex == "Konur", pop, 0)) |> 
+    filter(year >= 1900) |> 
+    ggplot(aes(x = age, y = ifelse(sex == "Karlar", -pop, pop),
+               ymin = ymin, ymax = ymax, fill = sex)) +
+    geom_ribbon(alpha = 0.5) +
+    geom_blank(aes(x = age, y = pop)) +
+    geom_rangeframe() +
+    geom_text(data = framf_hlutf |> filter(year >= 1900), 
+              aes(x = 100, y = 2000, label = text),
+              inherit.aes = F) +
+    geom_text(data = folksfjoldi |> filter(year >= 1900), 
+              aes(x = 100, y = -2000, label = text),
+              inherit.aes = F) +
+    geom_text(data = eldrifjoldi |> filter(year >= 1900), 
+              aes(x = 95, y = -2000, label = text),
+              inherit.aes = F) +
+    geom_text(data = kynjahlutfall |> filter(year >= 1900), 
+              aes(x = 10, y = -400, label = text_male),
+              inherit.aes = F) +
+    geom_text(data = kynjahlutfall |> filter(year >= 1900), 
+              aes(x = 10, y = 400, label = text_female),
+              inherit.aes = F) +
+    geom_text(data = medalaldur |> filter(year >= 1900), 
+              aes(x = 95, y = 2000, label = text),
+              inherit.aes = F) +
+    scale_x_continuous(limits = c(0, max(d$age)),
+                       breaks = c(range(d$age), seq(10, 100, by = 10)),
+                       expand = expansion()) +
+    scale_y_continuous(limits = c(-3600, 3600),
+                       breaks = c(-3000,
+                                  3000,
+                                  0,
+                                  -1000, 1000,
+                                  -2000, 2000),
+                       labels = c(3000, 3000, 0, 1000, 1000, 2000, 2000),
+                       expand = expansion(mult = 0.04)) +
+    scale_fill_brewer(type = "qual", palette = "Set1") +
+    scale_colour_brewer(type = "qual", palette = "Set1") +
+    coord_flip() +
+    theme_tufte() +
+    theme(legend.position = "bottom") +
+    labs(x = "Aldur", 
+         y = "Mannfjöldi", 
+         title = "Aldursdreifing mannfjölda eftir kyni frá 1900 til 2062",
+         subtitle = "Ár: {frame_time}",
+         fill = NULL) +
+    transition_time(as.integer(year)) +
+    ease_aes("cubic-in-out")
+
+p_vid <- animate(p, width = 8, height = 8, unit = "in", res = 150, fps = 25, duration = 25,
+                 renderer = ffmpeg_renderer(format = "webm"))
+
+anim_save(filename = "mannfjoldi.webm", animation = p_vid)
+```
