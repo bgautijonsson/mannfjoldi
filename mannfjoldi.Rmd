@@ -149,7 +149,7 @@ p <- d |>
     ease_aes("cubic-in-out")
 
 p_vid <- animate(p, width = 8, height = 8, unit = "in", res = 150, fps = 25, duration = 25,
-                 renderer = ffmpeg_renderer(format = "webm"))
+                 renderer = ffmpeg_renderer(format = "mp4"))
 
-anim_save(filename = "mannfjoldi.webm", animation = p_vid)
+anim_save(filename = "mannfjoldi.mp4", animation = p_vid)
 ```
