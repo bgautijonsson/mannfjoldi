@@ -37,6 +37,8 @@ d <- read.px("MAN00101.px") |>
 
 ## Age Population Pyramid
 
+### Pre-Process Label Data
+
 ```{r}
 framf_hlutf <- d |> 
     mutate(working = case_when(age <= 19 ~ "No",
@@ -89,6 +91,9 @@ medalaldur <- d |>
     select(-total_pop) |> 
     mutate(text = str_c("Meðalaldur: ", mean_age))
 ```
+
+
+### Animate Plot
 
 ```{r}
 p <- d |> 
