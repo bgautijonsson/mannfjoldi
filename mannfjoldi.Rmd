@@ -18,6 +18,7 @@ library(tidyverse)
 library(gganimate)
 library(scales)
 library(ggthemes)
+library(pxweb)
 ```
 
 
@@ -152,4 +153,75 @@ p_vid <- animate(p, width = 8, height = 8, unit = "in", res = 150, fps = 25, dur
                  renderer = ffmpeg_renderer(format = "mp4"))
 
 anim_save(filename = "mannfjoldi.mp4", animation = p_vid)
+```
+
+
+# Sveitarfélög
+
+```{r}
+mannfjoldi <- pxweb_get(
+    url ="https://px.hagstofa.is:443/pxis/api/v1/is/Ibuar/mannfjoldi/2_byggdir/sveitarfelog/MAN02005.px", 
+    query = list(
+        "Sveitarfélag" = c("*"),
+        "Aldur" = c("-1"),
+        "Ár" = c("*"),
+        "Kyn" = c("0")
+    ),
+    verbose = FALSE
+) |> 
+    as.data.frame() |> 
+    as_tibble() |> 
+    janitor::clean_names() |> 
+    rename(mannfjoldi = mannfjoldi_eftir_sveitarfelagi_kyni_og_aldri_1_januar_1998_2022) |> 
+    mutate(ar = parse_number(ar)) |> 
+    filter(sveitarfelag != "Alls") |> 
+    select(sveitarfelag, ar, mannfjoldi) |> 
+    mutate(sveitarfelag = fct_recode(sveitarfelag,
+                                     "Akureyrarkaupstaður" = "Akureyrarbær"))
+```
+
+```{r}
+plot_dat <- mannfjoldi |> 
+    group_by(sveitarfelag) |> 
+    filter(ar == max(ar), sveitarfelag != "Heild") |> 
+    ungroup() |> 
+    distinct(sveitarfelag, mannfjoldi) |> 
+    mutate(sveitarfelag = fct_reorder(sveitarfelag, mannfjoldi)) |> 
+    arrange(desc(mannfjoldi)) |> 
+    mutate(id = row_number())
+
+
+# lm(log(mannfjoldi, base = 10) ~ log(id, base = 10), data = plot_dat |> filter(id <= 40))
+
+plot_dat <- plot_dat |> 
+    mutate(y = 5.148 - 1.4 * log(id, base = 10),
+           y = 10^y,
+           y_zipf = 10^(5.148 - 1 * log(id, base = 10)))
+
+p <- plot_dat |> 
+    ggplot(aes(id, mannfjoldi)) +
+    geom_point() +
+    # geom_abline(intercept = 5.148, slope = -1, lty = 2) +
+    geom_line(aes(x = id, y = y_zipf), lty = 2) +
+    geom_line(aes(x = id, y = y)) +
+    geom_rangeframe() +
+    annotate(geom = "text", x = 60, y = 3.2e3, label = "Zipf lína") +
+    annotate(geom = "text", x = 60, y = 7e2, label = "Raunlína") +
+    annotate(geom = "text", x = 1, y = 220, parse = TRUE, hjust = 0,
+             label = "Zipf: y[n] == frac(y[1], n)") +
+    annotate(geom = "text", x = 1, y = 90, parse = TRUE, hjust = 0,
+             label = "Ísland: y[n] == frac(y[1], n^1.4)") +
+    scale_x_log10(breaks = c(1, 3, 10, 30, max(plot_dat$id))) +
+    scale_y_log10(breaks = c(range(plot_dat$mannfjoldi), 1e2, 1e3, 1e4),
+                  labels = label_number()) +
+    theme_tufte() +
+    labs(x = "Stærðarröðun",
+         y = "Mannfjöldi",
+         title = "Á lögmál Zipf við um mannfjölda í íslenskum sveitarfélögum?",
+         subtitle = "Á Íslandi er veldisvísirinn 1.4, en samkvæmt Zipf reglunni ætti hann að vera 1")
+
+ggsave(plot = p, filename = "zipf_island.png",
+       width = 8, height = 0.5 * 8, scale = 1.3, bg = "white")
+
+p
 ```
