@@ -218,7 +218,8 @@ p <- plot_dat |>
     labs(x = "Stærðarröðun",
          y = "Mannfjöldi",
          title = "Á lögmál Zipf við um mannfjölda í íslenskum sveitarfélögum?",
-         subtitle = "Á Íslandi er veldisvísirinn 1.4, en samkvæmt Zipf reglunni ætti hann að vera 1")
+         subtitle = "Á Íslandi er veldisvísirinn 1.4, en samkvæmt Zipf reglunni ætti hann að vera 1",
+         caption = "Kóði og gögn: https://github.com/bgautijonsson/mannfjoldi")
 
 ggsave(plot = p, filename = "zipf_island.png",
        width = 8, height = 0.5 * 8, scale = 1.3, bg = "white")
